@@ -58,7 +58,6 @@ class CSVFile:
                 return enc, content
             except UnicodeDecodeError:
                 continue
-        # PERUBAHAN DI SINI: ganti "CSVData" menjadi "CSVFile"
         raise UnicodeDecodeError("CSVFile", self.path, 0, 0, "Tidak bisa decode file dengan encoding fallback")
 
     def _detect_delimiter(self, sample_lines):
@@ -131,6 +130,73 @@ class CSVFile:
         else:
             raise TypeError("col_identifier harus string (nama header) atau int (index kolom)")
 
+    # ---------- Helper Methods for Looping ----------
+    def enumerate_rows(self):
+        """
+        Return enumerate object untuk looping dengan index dan row.
+        
+        Returns:
+            enumerate: Iterator yang menghasilkan (index, row)
+        
+        Example:
+            for index, row in csv_file.enumerate_rows():
+                print(f"Index: {index}, Row: {row}")
+                csv_file.update_row(index, [row[0], "updated"])
+        """
+        return enumerate(self.rows)
+
+    def iter_rows_with_index(self):
+        """
+        Generator yang menghasilkan (index, row) untuk setiap baris.
+        
+        Returns:
+            generator: Yang menghasilkan tuples (index, row)
+        
+        Example:
+            for index, row in csv_file.iter_rows_with_index():
+                print(f"Processing row {index}: {row}")
+        """
+        for index, row in enumerate(self.rows):
+            yield index, row
+
+    def get_rows_with_index(self):
+        """
+        Return list of tuples (index, row) untuk semua baris.
+        
+        Returns:
+            list: List of tuples [(index, row), ...]
+        
+        Example:
+            rows_with_index = csv_file.get_rows_with_index()
+            for index, row in rows_with_index:
+                print(f"Row {index}: {row}")
+        """
+        return list(enumerate(self.rows))
+
+    def update_rows(self, update_function):
+        """
+        Update multiple rows menggunakan function.
+        
+        Args:
+            update_function: Function yang menerima (index, row) dan return new_row list
+        
+        Example:
+            # Update semua row
+            csv_file.update_rows(lambda idx, row: [row[0], "success"])
+            
+            # Update dengan kondisi
+            def custom_update(index, row):
+                if row[1] > 18:  # jika age > 18
+                    return [row[0], "adult"]
+                return row  # return row asli jika tidak update
+            
+            csv_file.update_rows(custom_update)
+        """
+        for index, row in enumerate(self.rows):
+            new_row = update_function(index, row)
+            if new_row is not None:
+                self.rows[index] = new_row
+
     # ---------- Filter Methods ----------
     def filter_rows(self, condition: Callable[[list, int], bool]) -> 'CSVFile':
         """
@@ -145,7 +211,6 @@ class CSVFile:
         """
         filtered_rows = [row for i, row in enumerate(self.rows) if condition(row, i)]
         
-        # PERUBAHAN DI SINI: ganti CSVFile.__new__(CSVFile)
         filtered_csv = CSVFile.__new__(CSVFile)
         filtered_csv.path = self.path
         filtered_csv.candidates = self.candidates
@@ -411,6 +476,70 @@ class CSVFile:
             writer.writerows(data_to_save)
         
         print(f"Data berhasil disimpan ke: {save_path}")
+
+
+    def add_column(self, column_data=None, column_name=None, default_value=""):
+        """
+        Tambah kolom baru ke semua row.
+        
+        Args:
+            column_data: List nilai untuk kolom baru (harus sama panjang dengan rows)
+            column_name: Nama header untuk kolom baru (jika ada header)
+            default_value: Nilai default jika column_data tidak provided
+        """
+        if column_data and len(column_data) != len(self.rows):
+            raise ValueError("Panjang column_data harus sama dengan jumlah rows")
+        
+        # Tambah ke header jika ada
+        if self.has_header and column_name:
+            if self.normalize_header:
+                column_name = column_name.strip().lower().replace(" ", "_").replace("-", "_")
+            self.header.append(column_name)
+        
+        # Tambah kolom ke setiap row
+        for i, row in enumerate(self.rows):
+            if column_data:
+                # Gunakan nilai dari column_data
+                new_value = column_data[i]
+            else:
+                # Gunakan default value
+                new_value = default_value
+            
+            # Extend row dengan nilai baru
+            row.append(new_value)
+
+    def insert_column(self, position, column_data=None, column_name=None, default_value=""):
+        """
+        Sisipkan kolom baru di posisi tertentu.
+        
+        Args:
+            position: Posisi untuk menyisipkan kolom (0-based index)
+            column_data: List nilai untuk kolom baru
+            column_name: Nama header untuk kolom baru
+            default_value: Nilai default jika column_data tidak provided
+        """
+        if column_data and len(column_data) != len(self.rows):
+            raise ValueError("Panjang column_data harus sama dengan jumlah rows")
+        
+        expected_columns = self._get_expected_columns_count()
+        if position < 0 or position > expected_columns:
+            raise ValueError(f"Posisi kolom {position} tidak valid. Harus antara 0 dan {expected_columns}")
+        
+        # Sisipkan ke header jika ada
+        if self.has_header and column_name:
+            if self.normalize_header:
+                column_name = column_name.strip().lower().replace(" ", "_").replace("-", "_")
+            self.header.insert(position, column_name)
+        
+        # Sisipkan kolom ke setiap row
+        for i, row in enumerate(self.rows):
+            if column_data:
+                new_value = column_data[i]
+            else:
+                new_value = default_value
+            
+            row.insert(position, new_value)
+            
 
     def update_row_and_save(self, index, new_data, path=None):
         """
