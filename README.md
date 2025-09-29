@@ -222,8 +222,21 @@ print("\nUsers with 'a' in name:")
 name_contains_a = csv.filter_by_column("name", "a", "contains")
 for row in name_contains_a.to_dict():
     print(row)
-```
 
+
+# loop with add and update column
+csv_path = "data.csv" 
+csvdata = CSVFile(path=csv_path,candidates=",",has_header=False,skip_empty=True)
+if csvdata.get_columns_count()==1: csvdata.add_column()
+for index,row in csvdata.enumerate_rows():      
+    email = row[0]
+    password = row[0]
+        
+    csvdata.update_row(index,[email,"sukses"])
+    csvdata.save()
+
+
+```
 ## Class Methods Reference
 
 ### Initialization
